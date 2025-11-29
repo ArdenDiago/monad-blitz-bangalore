@@ -20,4 +20,4 @@ export const VIBEFI_ABI = [
   "event WinningsClaimed(bytes32 indexed sessionId, address indexed claimer, uint256 amount)"
 ];
 
-export const CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000000"; // Replace with actual address after deployment
+export const CONTRACT_ADDRESS = "0x88b6C261235AfbbaA50D75eD3A44ef049DA4351B"; // Replace with actual address after deployment
