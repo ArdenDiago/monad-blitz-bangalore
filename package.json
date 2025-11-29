@@ -1,0 +1,25 @@
+{
+  "name": "monad-blitz-bangalore",
+  "version": "1.0.0",
+  "description": "1. Visit the `monad-blitz-bangalore` repo (link here) and fork it.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ArdenDiago/monad-blitz-bangalore.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ArdenDiago/monad-blitz-bangalore/issues"
+  },
+  "homepage": "https://github.com/ArdenDiago/monad-blitz-bangalore#readme",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "dotenv": "^17.2.3",
+    "hardhat": "^3.0.16"
+  }
+}
