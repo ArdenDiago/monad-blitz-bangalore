@@ -18,8 +18,8 @@
   },
   "homepage": "https://github.com/ArdenDiago/monad-blitz-bangalore#readme",
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "dotenv": "^17.2.3",
-    "hardhat": "^3.0.16"
+    "hardhat": "^2.22.17"
   }
 }
