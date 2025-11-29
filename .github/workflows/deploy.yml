@@ -10,36 +10,43 @@ permissions:
 
 jobs:
   # ------------------------------------------------------------------
-  # JOB 1: FRONTEND (Now points to vibefi-app directory)
+  # JOB 1: FRONTEND (vibefi-app)
   # ------------------------------------------------------------------
   frontend-check:
     name: 🧪 Test Frontend
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./vibefi-app  # 👈 CRITICAL CHANGE
+        working-directory: ./vibefi-app  # Points to your Next.js app
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # 1. SETUP PNPM
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      # 2. SETUP NODE (With pnpm cache)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: 'npm'
-          cache-dependency-path: ./vibefi-app/package-lock.json # Adjust if using pnpm/yarn
+          cache: 'pnpm'
+          cache-dependency-path: ./vibefi-app/pnpm-lock.yaml
 
       - name: Install Dependencies
-        run: npm ci
+        run: pnpm install
 
       - name: Run Tests
-        run: npm test
+        run: pnpm test
 
       - name: Build Check
-        run: npm run build
+        run: pnpm run build
 
   # ------------------------------------------------------------------
-  # JOB 2: SMART CONTRACTS (Runs at Root)
+  # JOB 2: SMART CONTRACTS (Root)
   # ------------------------------------------------------------------
   contract-deploy:
     name: ⛓️ Deploy Contracts
@@ -61,17 +68,23 @@ jobs:
               - 'contracts/**'
               - 'hardhat.config.js'
 
-      # Setup Root Node (For Hardhat)
+      # Setup pnpm for Root
+      - name: Setup pnpm
+        if: steps.changes.outputs.contracts == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node/Hardhat
         if: steps.changes.outputs.contracts == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install Contract Deps
         if: steps.changes.outputs.contracts == 'true'
-        run: npm ci  # Installs root dependencies
+        run: pnpm install
 
       - name: Deploy to Monad
         if: steps.changes.outputs.contracts == 'true'
@@ -81,7 +94,8 @@ jobs:
           MONAD_RPC_URL: ${{ secrets.MONAD_RPC_URL }}
         run: |
           echo "Deploying..."
-          npx hardhat run scripts/deploy.js --network monad > deployment-output.txt
+          # Using pnpm hardhat instead of npx
+          pnpm hardhat run scripts/deploy.js --network monad > deployment-output.txt
           
           NEW_ADDRESS=$(grep -oE '0x[a-fA-F0-9]{40}' deployment-output.txt | head -n 1)
           
@@ -97,10 +111,7 @@ jobs:
       - name: Update Config File
         if: steps.changes.outputs.contracts == 'true'
         run: |
-          # Create the config folder if it doesn't exist inside the app
           mkdir -p ./vibefi-app/app/config
-          
-          # Write the file deep inside the frontend folder
           echo "{ \"contractAddress\": \"${{ env.NEW_ADDRESS }}\" }" > ./vibefi-app/app/config/contract-address.json
 
       - name: Commit New Address
@@ -144,7 +155,7 @@ jobs:
           exit 1
 
   # ------------------------------------------------------------------
-  # JOB 4: RELOAD VERCEL (Need to point Vercel to subdirectory)
+  # JOB 4: RELOAD VERCEL
   # ------------------------------------------------------------------
   deploy-prod:
     name: 🚀 Reload Vercel
