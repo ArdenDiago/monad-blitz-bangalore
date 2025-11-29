@@ -147,20 +147,47 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   const getAllSessions = async () => {
     if (!contract) return [];
     try {
-      // Limit the query range to avoid RPC errors (HTTP 413 or timeout)
-      // Monad testnet RPC has very strict limits, so we only fetch last 100 blocks
-      // In a production app, you would use an indexer or paginate this query.
+      // DRASTICALLY reduce query range to avoid RPC 413 errors
+      // Monad testnet RPC has VERY strict limits
       const currentBlock = await provider?.getBlockNumber();
-      const fromBlock = currentBlock ? Math.max(0, currentBlock - 100) : 0;
+      if (!currentBlock) return [];
+
+      // Start with only 10 blocks - much more conservative
+      let blockRange = 10;
+      let fromBlock = Math.max(0, currentBlock - blockRange);
 
       const filter = contract.filters.SessionCreated();
-      const events = await contract.queryFilter(filter, fromBlock);
+      let events: any[] = [];
+
+      try {
+        // Try to fetch with 10 block range
+        events = await contract.queryFilter(filter, fromBlock);
+      } catch (error: any) {
+        // If still fails with 413, try even smaller range
+        if (error?.code === 'UNKNOWN_ERROR' || error?.message?.includes('413')) {
+          console.warn('10 block range too large, trying 5 blocks...');
+          blockRange = 5;
+          fromBlock = Math.max(0, currentBlock - blockRange);
+          try {
+            events = await contract.queryFilter(filter, fromBlock);
+          } catch (e2) {
+            console.error('Even 5 block range failed, returning empty:', e2);
+            return [];
+          }
+        } else {
+          throw error; // Re-throw if it's a different error
+        }
+      }
+
       const sessionIds = events.map((e: any) => e.args[0]);
 
       // Reverse to show newest first
       const recentSessionIds = sessionIds.reverse();
 
-      const sessions = await Promise.all(recentSessionIds.map(id => getSession(id)));
+      // Limit to max 10 sessions to avoid overwhelming the UI
+      const limitedSessionIds = recentSessionIds.slice(0, 10);
+
+      const sessions = await Promise.all(limitedSessionIds.map(id => getSession(id)));
       return sessions.filter(s => s !== null);
     } catch (e) {
       console.error("Error fetching all sessions:", e);
