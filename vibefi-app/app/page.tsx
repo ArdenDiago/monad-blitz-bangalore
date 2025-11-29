@@ -9,6 +9,8 @@ import { Plus, Users, Zap, ArrowRight, Wallet } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
+import { BackgroundAnimation } from "@/components/ui/BackgroundAnimation";
+
 // Mock data for sessions if contract is not connected
 const MOCK_SESSIONS = [
   { id: "0x123...abc", creator: "0xAlice", participants: 5, phase: "OPEN", pool: "0.0 MON" },
@@ -45,7 +47,8 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-900/20 via-background to-background">
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-900/20 via-background to-background relative overflow-hidden">
+      <BackgroundAnimation />
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-white/10 bg-background/50 backdrop-blur-xl">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
@@ -69,7 +72,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-12">
+      <main className="container mx-auto px-4 py-12 relative z-10">
         {/* Hero */}
         <section className="mb-16 text-center">
           <motion.h1
