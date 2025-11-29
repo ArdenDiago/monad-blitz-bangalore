@@ -4,6 +4,13 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { ethers } from "ethers";
 import { VIBEFI_ABI, CONTRACT_ADDRESS } from "@/lib/abi";
 
+// FIX: Tell TypeScript that window.ethereum exists
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
 interface Web3ContextType {
   account: string | null;
   connectWallet: () => Promise<void>;
@@ -41,25 +48,24 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   const [chainId, setChainId] = useState<string | null>(null);
 
   const connectWallet = async () => {
-    if (typeof window.ethereum !== "undefined") {
+    if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
       try {
         const _provider = new ethers.BrowserProvider(window.ethereum);
         const accounts = await _provider.send("eth_requestAccounts", []);
         const _signer = await _provider.getSigner();
-        const _chainId = (await _provider.getNetwork()).chainId.toString();
+        const network = await _provider.getNetwork();
+        const _chainId = network.chainId.toString();
 
         setAccount(accounts[0]);
         setProvider(_provider);
         setChainId(_chainId);
 
         // Initialize contract
-        // Note: CONTRACT_ADDRESS needs to be set to a real address for this to work fully
-        const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
         if (CONTRACT_ADDRESS) {
           const _contract = new ethers.Contract(CONTRACT_ADDRESS, VIBEFI_ABI, _signer);
           setContract(_contract);
         } else {
-          console.warn("Contract address not set, running in UI-only mode or read-only if possible");
+          console.warn("Contract address not set, running in UI-only mode");
         }
 
       } catch (error) {
@@ -73,11 +79,15 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Check if already connected
     const checkConnection = async () => {
-      if (typeof window.ethereum !== "undefined") {
-        const _provider = new ethers.BrowserProvider(window.ethereum);
-        const accounts = await _provider.listAccounts();
-        if (accounts.length > 0) {
-          connectWallet();
+      if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
+        try {
+          const _provider = new ethers.BrowserProvider(window.ethereum);
+          const accounts = await _provider.listAccounts();
+          if (accounts.length > 0) {
+            connectWallet();
+          }
+        } catch (error) {
+          console.error("Error checking connection:", error);
         }
       }
     };
@@ -145,7 +155,7 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   };
 
   const getAllSessions = async () => {
-    if (!contract) return [];
+    if (!contract || !provider) return [];
     try {
       // DRASTICALLY reduce query range to avoid RPC 413 errors
       // Monad testnet RPC has VERY strict limits
@@ -191,7 +201,6 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
       return sessions.filter(s => s !== null);
     } catch (e) {
       console.error("Error fetching all sessions:", e);
-      // Return empty array on error to prevent app crash
       return [];
     }
   };
