@@ -169,8 +169,8 @@ contract VibeFi {
         s.player1 = p1;
         s.player2 = p2;
         s.phase1StartTime = block.timestamp;
-        s.phase1EndTime = block.timestamp + 4 minutes;
-        s.phase2EndTime = s.phase1EndTime + 1 minutes;
+        s.phase1EndTime = block.timestamp + 30 seconds;
+        s.phase2EndTime = s.phase1EndTime + 15 seconds;
         s.phase = SessionPhase.PHASE1_VOTING;
 
         emit SessionStarted(
@@ -421,10 +421,10 @@ contract VibeFi {
 
         // Generate two different random indices
         uint256 rand1 = uint256(
-            keccak256(abi.encodePacked(sessionId, block.prevrandao, 1))
+            keccak256(abi.encodePacked(sessionId, block.prevrandao, uint256(1)))
         ) % count;
         uint256 rand2 = uint256(
-            keccak256(abi.encodePacked(sessionId, block.prevrandao, 2))
+            keccak256(abi.encodePacked(sessionId, block.prevrandao, uint256(2)))
         ) % count;
 
         // Ensure they're different
