@@ -54,7 +54,8 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
 
         // Initialize contract
         // Note: CONTRACT_ADDRESS needs to be set to a real address for this to work fully
-        if (CONTRACT_ADDRESS && CONTRACT_ADDRESS !== "0x88b6C261235AfbbaA50D75eD3A44ef049DA4351B") {
+        const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+        if (CONTRACT_ADDRESS) {
           const _contract = new ethers.Contract(CONTRACT_ADDRESS, VIBEFI_ABI, _signer);
           setContract(_contract);
         } else {
@@ -146,58 +147,24 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   const getAllSessions = async () => {
     if (!contract) return [];
     try {
-      // Assuming sessionIds is a public array, we can access it via a getter if generated, 
-      // but standard ethers contract wrapper might need a loop if no getter for array.
-      // However, public arrays usually generate a getter that takes an index.
-      // We need to know the length. 
-      // Let's assume there is a way to get length or we just try to fetch a reasonable number.
-      // Wait, the contract has `sessionIds` public array.
-      // We can't get the whole array in one call with standard auto-generated getter.
-      // We need to loop. But we don't know the length.
-      // Actually, usually `sessionIds(index)` is the getter.
-      // We might need a helper in contract to get all, but we can't change contract.
-      // Let's try to fetch index 0, 1, 2... until revert? No that's slow.
-      // Ah, `sessionIds` is public, so `contract.sessionIds(i)` works.
-      // But we don't know the count.
-      // Wait, I missed if there is a `getSessionCount` or similar.
-      // Checking contract... `sessionIds` is `bytes32[] public`.
-      // There is no explicit count function.
-      // But we can try to find a way.
-      // Actually, for this task, maybe we just fetch the last few?
-      // Or maybe we can't easily get all without a count.
-      // Let's check if I can add a helper to the contract? No, "contracts/vibefi-contract.sol" is likely fixed or I should avoid changing it if possible?
-      // The user said "see @[contracts/vibefi-contract.sol] file it has all functions data available".
-      // Maybe I missed a length getter?
-      // `sessionIds` is public, so `sessionIds` getter takes an index.
-      // There is no `getSessionCount`.
-      // However, I can try to call `sessionIds` with a large number and catch error? No.
-      // Wait, usually for public arrays, there isn't a length getter generated automatically in older solidity, but in 0.8?
-      // No, still need index.
-      // Let's look at the contract again.
-      // `bytes32[] public sessionIds;`
-      // Maybe I can just use a loop and break on error?
-      // Or maybe I can't implement `getAllSessions` efficiently without a count.
-      // BUT, I can implement `createSession` which returns an ID.
-      // And the user wants to "join the session and vote, using link user need to join".
-      // So maybe listing all sessions is not strictly required if they join via link?
-      // But the home page lists "Active Sessions".
-      // I should try to implement it if possible.
-      // Let's assume for now I can't easily get all sessions without a count or event logs.
-      // I will implement `getAllSessions` to return an empty array or maybe just try to fetch index 0 to 9.
-
-      // actually, I can try to read the array length if I access the storage slot directly? No, that's complex.
-      // Let's just try to fetch the first 10 sessions for now as a hack, or rely on events?
-      // Events are better. `SessionCreated`.
-      // I can query past events `SessionCreated`.
+      // Limit the query range to avoid RPC errors (HTTP 413 or timeout)
+      // Monad testnet RPC has very strict limits, so we only fetch last 100 blocks
+      // In a production app, you would use an indexer or paginate this query.
+      const currentBlock = await provider?.getBlockNumber();
+      const fromBlock = currentBlock ? Math.max(0, currentBlock - 100) : 0;
 
       const filter = contract.filters.SessionCreated();
-      const events = await contract.queryFilter(filter);
+      const events = await contract.queryFilter(filter, fromBlock);
       const sessionIds = events.map((e: any) => e.args[0]);
 
-      const sessions = await Promise.all(sessionIds.map(id => getSession(id)));
+      // Reverse to show newest first
+      const recentSessionIds = sessionIds.reverse();
+
+      const sessions = await Promise.all(recentSessionIds.map(id => getSession(id)));
       return sessions.filter(s => s !== null);
     } catch (e) {
       console.error("Error fetching all sessions:", e);
+      // Return empty array on error to prevent app crash
       return [];
     }
   };

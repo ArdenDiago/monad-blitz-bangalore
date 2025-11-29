@@ -1,21 +1,22 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, HTMLMotionProps } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
-interface NeonButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface NeonButtonProps extends Omit<HTMLMotionProps<"button">, "children"> {
   variant?: "primary" | "secondary" | "danger" | "ghost";
   isLoading?: boolean;
+  children?: React.ReactNode;
 }
 
-export function NeonButton({ 
-  children, 
-  className, 
-  variant = "primary", 
-  isLoading, 
+export function NeonButton({
+  children,
+  className,
+  variant = "primary",
+  isLoading,
   disabled,
-  ...props 
+  ...props
 }: NeonButtonProps) {
   const variants = {
     primary: "bg-primary text-white hover:bg-primary/90 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]",
