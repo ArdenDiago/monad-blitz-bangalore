@@ -4,6 +4,13 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { ethers } from "ethers";
 import { VIBEFI_ABI, CONTRACT_ADDRESS } from "@/lib/abi";
 
+// FIX: Tell TypeScript that window.ethereum exists
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
 interface Web3ContextType {
   account: string | null;
   connectWallet: () => Promise<void>;
@@ -41,25 +48,24 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   const [chainId, setChainId] = useState<string | null>(null);
 
   const connectWallet = async () => {
-    if (typeof window.ethereum !== "undefined") {
+    if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
       try {
         const _provider = new ethers.BrowserProvider(window.ethereum);
         const accounts = await _provider.send("eth_requestAccounts", []);
         const _signer = await _provider.getSigner();
-        const _chainId = (await _provider.getNetwork()).chainId.toString();
+        const network = await _provider.getNetwork();
+        const _chainId = network.chainId.toString();
 
         setAccount(accounts[0]);
         setProvider(_provider);
         setChainId(_chainId);
 
         // Initialize contract
-        // Note: CONTRACT_ADDRESS needs to be set to a real address for this to work fully
-        const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
         if (CONTRACT_ADDRESS) {
           const _contract = new ethers.Contract(CONTRACT_ADDRESS, VIBEFI_ABI, _signer);
           setContract(_contract);
         } else {
-          console.warn("Contract address not set, running in UI-only mode or read-only if possible");
+          console.warn("Contract address not set, running in UI-only mode");
         }
 
       } catch (error) {
@@ -73,11 +79,15 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Check if already connected
     const checkConnection = async () => {
-      if (typeof window.ethereum !== "undefined") {
-        const _provider = new ethers.BrowserProvider(window.ethereum);
-        const accounts = await _provider.listAccounts();
-        if (accounts.length > 0) {
-          connectWallet();
+      if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
+        try {
+          const _provider = new ethers.BrowserProvider(window.ethereum);
+          const accounts = await _provider.listAccounts();
+          if (accounts.length > 0) {
+            connectWallet();
+          }
+        } catch (error) {
+          console.error("Error checking connection:", error);
         }
       }
     };
@@ -102,8 +112,10 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
     if (!contract) return null;
     try {
       const session = await contract.getSession(sessionId);
-      // Convert struct to object if needed, or return as is
-      // Ethers v6 returns Result object which is array-like but has properties
+      
+      // Safety check: ensure result exists
+      if (!session) return null;
+
       return {
         id: session.id,
         creator: session.creator,
@@ -145,13 +157,11 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   };
 
   const getAllSessions = async () => {
-    if (!contract) return [];
+    if (!contract || !provider) return [];
     try {
-      // Limit the query range to avoid RPC errors (HTTP 413 or timeout)
-      // Monad testnet RPC has very strict limits, so we only fetch last 100 blocks
-      // In a production app, you would use an indexer or paginate this query.
-      const currentBlock = await provider?.getBlockNumber();
-      const fromBlock = currentBlock ? Math.max(0, currentBlock - 100) : 0;
+      // Limit the query range to avoid RPC errors
+      const currentBlock = await provider.getBlockNumber();
+      const fromBlock = Math.max(0, currentBlock - 100);
 
       const filter = contract.filters.SessionCreated();
       const events = await contract.queryFilter(filter, fromBlock);
@@ -164,7 +174,6 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
       return sessions.filter(s => s !== null);
     } catch (e) {
       console.error("Error fetching all sessions:", e);
-      // Return empty array on error to prevent app crash
       return [];
     }
   };
