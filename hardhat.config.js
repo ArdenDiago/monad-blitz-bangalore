@@ -1,13 +1,25 @@
 require("@nomicfoundation/hardhat-toolbox");
-require("dotenv").config(); // This loads the env vars
+require("dotenv").config();
 
 module.exports = {
-  solidity: "0.8.20", // Or your version
-  networks: {
-    monad: {
-      url: process.env.MONAD_RPC_URL, // Reads the Secret from GitHub
-      accounts: [process.env.PRIVATE_KEY], // Reads the Private Key from GitHub
-      chainId: 10143, // (Check the correct Chain ID for Monad Testnet, currently often 10143 or 20143)
+  solidity: {
+    version: "0.8.20", // Make sure this matches the version in your .sol file
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+      viaIR: true, // 👈 THIS IS THE FIX FOR "Stack too deep"
     },
   },
+  networks: {
+    monad: {
+      url: process.env.MONAD_RPC_URL,
+      accounts: [process.env.PRIVATE_KEY],
+      chainId: 10143,
+    },
+  },
+  sourcify: {
+    enabled: false
+  }
 };
