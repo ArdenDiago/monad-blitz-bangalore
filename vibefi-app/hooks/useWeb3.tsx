@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { ethers } from "ethers";
-import { VIBEFI_ABI, CONTRACT_ADDRESS } from "@/lib/abi";
+import { VIBEFI_ABI } from "@/lib/abi"; 
+import config from "@/lib/contract-address.json"; // 👈 IMPORT THE AUTO-GENERATED FILE
 
 // FIX: Tell TypeScript that window.ethereum exists
 declare global {
@@ -60,12 +61,17 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
         setProvider(_provider);
         setChainId(_chainId);
 
-        // Initialize contract
-        if (CONTRACT_ADDRESS) {
-          const _contract = new ethers.Contract(CONTRACT_ADDRESS, VIBEFI_ABI, _signer);
+        // ------------------------------------------------------------
+        // FIX: Use the address from the JSON file
+        // ------------------------------------------------------------
+        const dynamicAddress = config.contractAddress;
+
+        if (dynamicAddress && dynamicAddress.startsWith("0x")) {
+          const _contract = new ethers.Contract(dynamicAddress, VIBEFI_ABI, _signer);
           setContract(_contract);
+          console.log("Connected to contract at:", dynamicAddress);
         } else {
-          console.warn("Contract address not set, running in UI-only mode");
+          console.warn("Contract address not set in lib/contract-address.json");
         }
 
       } catch (error) {
