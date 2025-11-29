@@ -2,19 +2,22 @@ name: Vibefi Monad Pipeline
 
 on:
   push:
-    branches: [ "vibefi" ]  # 1. ONLY TRIGGERS ON VIBEFI
+    branches: [ "vibefi" ]
   workflow_dispatch:
 
 permissions:
-  contents: write # Required for merging and committing changes
+  contents: write
 
 jobs:
   # ------------------------------------------------------------------
-  # JOB 1: TEST FRONTEND (The Quality Gate)
+  # JOB 1: FRONTEND (Now points to vibefi-app directory)
   # ------------------------------------------------------------------
   frontend-check:
     name: 🧪 Test Frontend
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./vibefi-app  # 👈 CRITICAL CHANGE
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -24,19 +27,19 @@ jobs:
         with:
           node-version: 18
           cache: 'npm'
+          cache-dependency-path: ./vibefi-app/package-lock.json # Adjust if using pnpm/yarn
 
       - name: Install Dependencies
         run: npm ci
 
       - name: Run Tests
         run: npm test
-        # IF THIS FAILS, THE WORKFLOW DIES HERE. NO MERGE.
 
       - name: Build Check
         run: npm run build
 
   # ------------------------------------------------------------------
-  # JOB 2: SMART CONTRACTS (Deploy & Update Address)
+  # JOB 2: SMART CONTRACTS (Runs at Root)
   # ------------------------------------------------------------------
   contract-deploy:
     name: ⛓️ Deploy Contracts
@@ -47,9 +50,8 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          ref: vibefi  # Ensure we are on vibefi branch
+          ref: vibefi
 
-      # Check if contracts actually changed
       - name: Check for Contract Changes
         uses: dorny/paths-filter@v2
         id: changes
@@ -59,6 +61,7 @@ jobs:
               - 'contracts/**'
               - 'hardhat.config.js'
 
+      # Setup Root Node (For Hardhat)
       - name: Setup Node/Hardhat
         if: steps.changes.outputs.contracts == 'true'
         uses: actions/setup-node@v4
@@ -68,7 +71,7 @@ jobs:
 
       - name: Install Contract Deps
         if: steps.changes.outputs.contracts == 'true'
-        run: npm ci
+        run: npm ci  # Installs root dependencies
 
       - name: Deploy to Monad
         if: steps.changes.outputs.contracts == 'true'
@@ -80,41 +83,48 @@ jobs:
           echo "Deploying..."
           npx hardhat run scripts/deploy.js --network monad > deployment-output.txt
           
-          # GRAB THE ADDRESS
           NEW_ADDRESS=$(grep -oE '0x[a-fA-F0-9]{40}' deployment-output.txt | head -n 1)
           
           if [ -z "$NEW_ADDRESS" ]; then
-            echo "::error::❌ Failed to capture Contract Address! Check deploy.js output."
+            echo "::error::❌ Failed to capture Address!"
             exit 1
           fi
-
           echo "NEW_ADDRESS=$NEW_ADDRESS" >> $GITHUB_ENV
 
+      # ------------------------------------------------------------------
+      # SAVE JSON TO THE SUBDIRECTORY
+      # ------------------------------------------------------------------
       - name: Update Config File
         if: steps.changes.outputs.contracts == 'true'
-        run: echo "{ \"contractAddress\": \"${{ env.NEW_ADDRESS }}\" }" > ./src/config/contract-address.json
+        run: |
+          # Create the config folder if it doesn't exist inside the app
+          mkdir -p ./vibefi-app/app/config
+          
+          # Write the file deep inside the frontend folder
+          echo "{ \"contractAddress\": \"${{ env.NEW_ADDRESS }}\" }" > ./vibefi-app/app/config/contract-address.json
 
-      - name: Commit New Address to Vibefi
+      - name: Commit New Address
         if: steps.changes.outputs.contracts == 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "🤖 CI: Updated Contract Address [skip ci]"
           branch: vibefi
+          file_pattern: vibefi-app/app/config/contract-address.json
 
   # ------------------------------------------------------------------
-  # JOB 3: THE MERGE (Vibefi -> Main)
+  # JOB 3: MERGE (Same as before)
   # ------------------------------------------------------------------
   merge-to-main:
     name: 🔀 Merge to Main
     runs-on: ubuntu-latest
-    needs: [frontend-check, contract-deploy] # WAIT FOR BOTH TO PASS
-    if: success() # ONLY RUN IF PREVIOUS JOBS SUCCEEDED
+    needs: [frontend-check, contract-deploy]
+    if: success()
     steps:
       - name: Checkout Main
         uses: actions/checkout@v4
         with:
           ref: main
-          fetch-depth: 0 # Fetch all history for merge
+          fetch-depth: 0
 
       - name: Configure Git
         run: |
@@ -123,30 +133,29 @@ jobs:
 
       - name: Merge Vibefi
         run: |
-          echo "Attempting to merge vibefi into main..."
           git fetch origin vibefi
-          git merge origin/vibefi --no-ff -m "🔀 Auto-merge vibefi to main after successful tests"
+          git merge origin/vibefi --no-ff -m "🔀 Auto-merge vibefi to main"
           git push origin main
       
       - name: Error Notification
         if: failure()
         run: |
-          echo "::error::⛔ MERGE FAILED. Frontend or Contract checks did not pass."
+          echo "::error::⛔ MERGE FAILED."
           exit 1
 
   # ------------------------------------------------------------------
-  # JOB 4: RELOAD VERCEL (Production Deploy)
+  # JOB 4: RELOAD VERCEL (Need to point Vercel to subdirectory)
   # ------------------------------------------------------------------
   deploy-prod:
     name: 🚀 Reload Vercel
     runs-on: ubuntu-latest
-    needs: merge-to-main # WAIT FOR MERGE
+    needs: merge-to-main
     if: success()
     steps:
       - name: Checkout Main
         uses: actions/checkout@v4
         with:
-          ref: main # Deploy the freshly merged main code
+          ref: main 
 
       - name: Deploy to Vercel
         uses: amondnet/vercel-action@v25
@@ -154,4 +163,4 @@ jobs:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: '--prod' # Triggers production reload
+          vercel-args: '--prod'
