@@ -14,7 +14,7 @@ interface Web3ContextType {
 
 const Web3Context = createContext<Web3ContextType>({
   account: null,
-  connectWallet: async () => {},
+  connectWallet: async () => { },
   contract: null,
   provider: null,
   chainId: null,
@@ -33,7 +33,7 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
         const accounts = await _provider.send("eth_requestAccounts", []);
         const _signer = await _provider.getSigner();
         const _chainId = (await _provider.getNetwork()).chainId.toString();
-        
+
         setAccount(accounts[0]);
         setProvider(_provider);
         setChainId(_chainId);
@@ -41,10 +41,10 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
         // Initialize contract
         // Note: CONTRACT_ADDRESS needs to be set to a real address for this to work fully
         if (CONTRACT_ADDRESS && CONTRACT_ADDRESS !== "0x0000000000000000000000000000000000000000") {
-            const _contract = new ethers.Contract(CONTRACT_ADDRESS, VIBEFI_ABI, _signer);
-            setContract(_contract);
+          const _contract = new ethers.Contract(CONTRACT_ADDRESS, VIBEFI_ABI, _signer);
+          setContract(_contract);
         } else {
-            console.warn("Contract address not set, running in UI-only mode or read-only if possible");
+          console.warn("Contract address not set, running in UI-only mode or read-only if possible");
         }
 
       } catch (error) {
