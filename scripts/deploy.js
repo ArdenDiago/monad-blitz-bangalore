@@ -8,7 +8,7 @@ async function main() {
   // IMPORTANT: The name inside quotes must match the "class" name inside your .sol file,
   // NOT necessarily the filename. 
   // If your file is "vibefi-contract.sol", open it and check "contract XXXXX {"
-  const ContractName = "VibefiContract"; 
+  const ContractName = "VibeFi"; 
   
   const ContractFactory = await hre.ethers.getContractFactory(ContractName);
 
