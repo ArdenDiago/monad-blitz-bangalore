@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import { BackgroundAnimation } from "@/components/ui/BackgroundAnimation";
 
 export default function Home() {
-  const { account, connectWallet, contract, getAllSessions } = useWeb3();
+  const { account, connectWallet, contract, getAllSessions, createSession } = useWeb3();
   const [sessions, setSessions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -35,16 +35,10 @@ export default function Home() {
     if (!contract) return alert("Connect wallet first!");
     try {
       setIsLoading(true);
-      const tx = await contract.createSession();
-      const receipt = await tx.wait();
-
-      // Find the SessionCreated event to get the new ID
-      // This depends on how the receipt logs are parsed, but usually we can just refresh
-      alert("Session created! Refreshing...");
-      fetchSessions();
-
-      // Ideally redirect to the new session, but we need the ID.
-      // For now just refresh list.
+      const sessionId = await createSession();
+      alert(`Session created! ID: ${sessionId.slice(0, 10)}...`);
+      await fetchSessions(); // Refresh the list
+      router.push(`/session/${sessionId}`); // Navigate to the new session
     } catch (e) {
       console.error(e);
       alert("Failed to create session");

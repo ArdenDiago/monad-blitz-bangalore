@@ -29,7 +29,7 @@ interface SessionData {
 
 export default function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { account, contract, getSession, joinSession, placeVote, startSession, playerVote, claimWinnings } = useWeb3();
+  const { account, contract, getSession, joinSession, placeVote, startSession, playerVote, claimWinnings, trackSessionId } = useWeb3();
 
   // State
   const [session, setSession] = useState<SessionData | null>(null);
@@ -41,6 +41,7 @@ export default function SessionPage({ params }: { params: Promise<{ id: string }
   // Fetch Session Data
   const fetchSession = async () => {
     if (contract && id) {
+      trackSessionId(id); // Track this session
       const data = await getSession(id);
       if (data) {
         // Convert BigInt timestamps to milliseconds for JS Date

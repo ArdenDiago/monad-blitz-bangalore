@@ -12,6 +12,9 @@ declare global {
   }
 }
 
+// LocalStorage key for tracking session IDs
+const TRACKED_SESSIONS_KEY = "vibefi_tracked_sessions";
+
 interface Web3ContextType {
   account: string | null;
   connectWallet: () => Promise<void>;
@@ -25,6 +28,8 @@ interface Web3ContextType {
   playerVote: (sessionId: string, vote: boolean) => Promise<void>;
   claimWinnings: (sessionId: string) => Promise<void>;
   getAllSessions: () => Promise<any[]>;
+  createSession: () => Promise<string>; // Returns session ID
+  trackSessionId: (sessionId: string) => void; // Track a session locally
 }
 
 const Web3Context = createContext<Web3ContextType>({
@@ -40,6 +45,8 @@ const Web3Context = createContext<Web3ContextType>({
   playerVote: async () => { },
   claimWinnings: async () => { },
   getAllSessions: async () => { return []; },
+  createSession: async () => { return ""; },
+  trackSessionId: () => { },
 });
 
 export function Web3Provider({ children }: { children: React.ReactNode }) {
@@ -47,6 +54,24 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   const [contract, setContract] = useState<ethers.Contract | null>(null);
   const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null);
   const [chainId, setChainId] = useState<string | null>(null);
+
+  // Helper functions for localStorage
+  const getTrackedSessionIds = (): string[] => {
+    if (typeof window === "undefined") return [];
+    const stored = localStorage.getItem(TRACKED_SESSIONS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  };
+
+  const trackSessionId = (sessionId: string) => {
+    if (typeof window === "undefined") return;
+    const tracked = getTrackedSessionIds();
+    if (!tracked.includes(sessionId)) {
+      tracked.unshift(sessionId); // Add to beginning
+      // Keep only last 20 sessions
+      const limited = tracked.slice(0, 20);
+      localStorage.setItem(TRACKED_SESSIONS_KEY, JSON.stringify(limited));
+    }
+  };
 
   const connectWallet = async () => {
     if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
@@ -100,8 +125,36 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
     checkConnection();
   }, []);
 
+  const createSession = async (): Promise<string> => {
+    if (!contract) throw new Error("Contract not initialized");
+    const tx = await contract.createSession();
+    const receipt = await tx.wait();
+
+    // Find the SessionCreated event to get the session ID
+    const event = receipt.logs.find((log: any) => {
+      try {
+        const parsed = contract.interface.parseLog(log);
+        return parsed?.name === "SessionCreated";
+      } catch {
+        return false;
+      }
+    });
+
+    if (event) {
+      const parsed = contract.interface.parseLog(event);
+      const sessionId = parsed?.args[0];
+      if (sessionId) {
+        trackSessionId(sessionId); // Store it locally
+        return sessionId;
+      }
+    }
+
+    throw new Error("Could not extract session ID from transaction");
+  };
+
   const joinSession = async (sessionId: string) => {
     if (!contract) throw new Error("Contract not initialized");
+    trackSessionId(sessionId); // Track when joining
     const tx = await contract.joinSession(sessionId);
     await tx.wait();
   };
@@ -118,10 +171,6 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
     if (!contract) return null;
     try {
       const session = await contract.getSession(sessionId);
-      
-      // Safety check: ensure result exists
-      if (!session) return null;
-
       return {
         id: session.id,
         creator: session.creator,
@@ -165,18 +214,46 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
   const getAllSessions = async () => {
     if (!contract || !provider) return [];
     try {
-      // Limit the query range to avoid RPC errors
+      // Fetch tracked sessions from localStorage
+      const trackedIds = getTrackedSessionIds();
+
+      // Fetch recent sessions from blockchain (limited range)
       const currentBlock = await provider.getBlockNumber();
-      const fromBlock = Math.max(0, currentBlock - 100);
+      if (!currentBlock) return [];
 
+      let blockRange = 10;
+      let fromBlock = Math.max(0, currentBlock - blockRange);
       const filter = contract.filters.SessionCreated();
-      const events = await contract.queryFilter(filter, fromBlock);
-      const sessionIds = events.map((e: any) => e.args[0]);
+      let events: any[] = [];
 
-      // Reverse to show newest first
-      const recentSessionIds = sessionIds.reverse();
+      try {
+        events = await contract.queryFilter(filter, fromBlock);
+      } catch (error: any) {
+        if (error?.code === 'UNKNOWN_ERROR' || error?.message?.includes('413')) {
+          console.warn('10 block range too large, trying 5 blocks...');
+          blockRange = 5;
+          fromBlock = Math.max(0, currentBlock - blockRange);
+          try {
+            events = await contract.queryFilter(filter, fromBlock);
+          } catch (e2) {
+            console.error('Even 5 block range failed:', e2);
+            events = []; // Continue with tracked sessions only
+          }
+        } else {
+          throw error;
+        }
+      }
 
-      const sessions = await Promise.all(recentSessionIds.map(id => getSession(id)));
+      const recentSessionIds = events.map((e: any) => e.args[0]);
+
+      // Combine both sources and remove duplicates
+      const allSessionIds = [...new Set([...recentSessionIds, ...trackedIds])];
+
+      // Limit to 20 sessions max
+      const limitedSessionIds = allSessionIds.slice(0, 20);
+
+      // Fetch all session data
+      const sessions = await Promise.all(limitedSessionIds.map(id => getSession(id)));
       return sessions.filter(s => s !== null);
     } catch (e) {
       console.error("Error fetching all sessions:", e);
@@ -197,7 +274,9 @@ export function Web3Provider({ children }: { children: React.ReactNode }) {
       startSession,
       playerVote,
       claimWinnings,
-      getAllSessions
+      getAllSessions,
+      createSession,
+      trackSessionId
     }}>
       {children}
     </Web3Context.Provider>
