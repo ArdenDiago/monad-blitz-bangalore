@@ -4,7 +4,8 @@
   "description": "1. Visit the `monad-blitz-bangalore` repo (link here) and fork it.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "pnpm --filter vibefi-app build"
   },
   "repository": {
     "type": "git",
