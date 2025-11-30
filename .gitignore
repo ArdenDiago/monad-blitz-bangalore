@@ -53,3 +53,10 @@ node_modules
 build
 dist
 
+
+# Ignore heavy folders
+node_modules
+.next
+build
+dist
+
